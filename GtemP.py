@@ -52,6 +52,7 @@ class GP_Object:
         self.times = data['rjd']
         self.y = data[self._varname]
         self.yerr = data[self._svarname]
+        self.outdir = cwd + 'out/'
 
     def rm_outlier(self, mad_rejection = 10):
         # MAD rejection threshold for the outlier removal
@@ -76,7 +77,9 @@ class GP_Object:
         self.jitter = ModifiedLogUniform(y_sig, 2*y_ptp)
 
     def priors(self):
-        return(np.array([self.n_eta1.rvs(), self.n_eta2.rvs(), self.n_eta3.rvs(), self.n_eta4.rvs(), self.jitter.rvs()]))
+        return(np.array([self.n_eta1.rvs(), self.n_eta2.rvs(),
+                         self.n_eta3.rvs(), self.n_eta4.rvs(),
+                         self.jitter.rvs()]))
 
     def logPosterior(self, HyperParam):
         n1,n2,n3,n4,j = HyperParam
@@ -97,10 +100,12 @@ class GP_Object:
     def run_emcee(self, niter = 10000, discard=1000, thin=15):
         self.ndim = self.priors().size
         nwalkers = 2*self.ndim
-        self.sampler = emcee.EnsembleSampler(nwalkers, self.ndim, self.logPosterior)
+        self.sampler = emcee.EnsembleSampler(nwalkers, self.ndim,
+                                             self.logPosterior)
         p0=[self.priors() for i in range(nwalkers)]
         self.sampler.run_mcmc(p0, niter, progress=True)
-        self.flat_samples = self.sampler.get_chain(discard=discard, thin=thin, flat=True)
+        self.flat_samples = self.sampler.get_chain(discard=discard, thin=thin,
+                                                   flat=True)
 
     def chain_plot(self):
         #chains plot
@@ -119,15 +124,18 @@ class GP_Object:
     def corner_plot(self):
         #corner plot
         labels = ["$\eta_1$", "$\eta_2$", "$\eta_3$", "$\eta_4$", "Jitter"]
-        fig = corner.corner(self.flat_samples, labels=labels, color="k", bins = 50,
-                            quantiles=[0.16, 0.5, 0.84], smooth=True, smooth1d=True,
-                            show_titles=True, plot_density=True, plot_contours=True,
-                            fill_contours=True, plot_datapoints=False, title_fmt='g')
-        plt.savefig(cwd + 'GP_out/' + self._target + '_' + self._varname + '_corner.pdf' , format="pdf", bbox_inches="tight")
+        fig = corner.corner(self.flat_samples, labels=labels, color="k",
+                            bins = 50, quantiles=[0.16, 0.5, 0.84], smooth=True,
+                            smooth1d=True, show_titles=True, plot_density=True,
+                            plot_contours=True, fill_contours=True,
+                            plot_datapoints=False, title_fmt='g')
+        plt.savefig(self.outdir + self._target + '_' + self._varname + '_corner.pdf',
+                    format="pdf", bbox_inches="tight")
         plt.show()
 
     def best_fit(self):
-        ind_mlh = np.argmax([self.logPosterior(self.flat_samples[i]) for i in tqdm(range(len(self.flat_samples)))])
+        ind_mlh = np.argmax([self.logPosterior(self.flat_samples[i])
+                             for i in tqdm(range(len(self.flat_samples)))])
         sample_mlh = self.flat_samples[ind_mlh]
         return (sample_mlh, self.logPosterior(sample_mlh))
 
@@ -148,13 +156,19 @@ class GP_Object:
         plt.xlabel('rjd (d)', size=12, weight='bold')
         plt.ylabel(self._varname, size=12, weight='bold')
         plt.show()
-       # ax.annotate('wrms : ' + str(self.get_wrms('vrad', 'svrad')), (np.min(self.data['rjd']), np.max(self.data[obs])))
 
     def plot_periodogram(self, c='k'):
         wf = np.ones(len(self.times))
-        frequency, power = LombScargle(self.times, wf, fit_mean=False, center_data=False).autopower(minimum_frequency=0.0005, maximum_frequency=1/1.5) #nyquist_factor=15)
+        frequency, power = LombScargle(
+            self.times,
+            wf,
+            fit_mean=False,
+            center_data=False).autopower(minimum_frequency=0.0005,
+                                         maximum_frequency=1/1.5)
         plt.plot(1/frequency, power, 'k', alpha=0.1)
-        frequency, power = LombScargle(self.times, self.y).autopower(minimum_frequency=1/2000, maximum_frequency=1/1.5)
+        frequency, power = LombScargle(
+            self.times,
+            self.y).autopower(minimum_frequency=1/2000, maximum_frequency=1/1.5)
         plt.plot(1/frequency, power, c=c)
         plt.ylabel("power", size=12, weight='bold')
         plt.xlabel("period (d)", size=12, weight='bold')
@@ -175,14 +189,14 @@ class GP_Object:
         mean = means.Constant(np.mean(self.y))
         gpOBJ = process.GP(kernel, mean, self.times, self.y, yerr = self.yerr)
 
-        tplot = np.linspace(np.min(self.times) - 50, np.max(self.times) + 50, 5000)
+        tplot = np.linspace(np.min(self.times)-50, np.max(self.times)+50, 5000)
 
         y_mean, y_std, time = gpOBJ.prediction(kernel,mean,tplot)
 
         fig, ax = plt.subplots(2, 1, sharex=True, height_ratios=(2,1))
         ax[0].errorbar(self.times, self.y, self.yerr, fmt='ko')
         ax[0].plot(tplot, y_mean, c=c)
-        ax[0].fill_between(tplot, y_mean + y_std, y_mean - y_std, color=c, alpha = 0.3)
+        ax[0].fill_between(tplot, y_mean+y_std, y_mean-y_std, color=c, alpha=0.3)
         ax[0].set_ylabel(self._varname, size=12, weight='bold')
 
         y_sample, _, _ = gpOBJ.prediction(kernel,mean,self.times)
@@ -190,8 +204,14 @@ class GP_Object:
         ax[1].errorbar(self.times, y_sample, self.yerr, fmt='ko')
         ax[1].set_xlabel('rjd (d)', size=12, weight='bold')
         ax[1].set_ylabel('residuals', size=12, weight='bold')
-        ax[1].annotate( "wRMS :  " + str(mean_squared_error(y_sample, np.zeros_like(y_sample), sample_weight=1/self.yerr, squared=False)), (self.times[2], np.max(y_sample)) )
-        plt.savefig(cwd + 'GP_out/' + self._target + '_' + self._varname + '_fit.pdf' , format="pdf", bbox_inches="tight")
+        ax[1].annotate( "wRMS :  "
+                        + str(mean_squared_error(y_sample,
+                                                np.zeros_like(y_sample),
+                                                sample_weight=1/self.yerr,
+                                                squared=False))
+                                        , (self.times[2], np.max(y_sample)))
+        plt.savefig(self.outdir + self._target + '_' + self._varname + '_fit.pdf',
+                    format="pdf", bbox_inches="tight")
         plt.show()
 
 ## tools
