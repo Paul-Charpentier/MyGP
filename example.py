@@ -47,13 +47,14 @@ yourGP.run_emcee()
 
 ## to check to convergence get a look at
 
-yourGP.chain_plot()
+#yourGP.chain_plot()
 
 ## Get your corner plots
 
-yourGP.corner_plot()
+#yourGP.corner_plot()
 
 ## look how it fits
 
-yourGP.display_fit(yourGP.mean_fit())
+#yourGP.display_fit(yourGP.mean_fit())
 
+yourGP.save_results()
