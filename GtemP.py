@@ -12,7 +12,7 @@ import sys
 sys.path.append(os.path.abspath("/home/paul/Bureau/IRAP/TediGP"))
 import process, kernels, means
 from tqdm import tqdm
-from IPython.display import display, Math
+#from IPython.display import display, Math
 import csv
 from collections import OrderedDict
 sys.path.append(os.path.abspath("/media/paul/One Touch11/wapiti_workflow"))
@@ -43,9 +43,11 @@ cwd = "/media/paul/One Touch11/UdeM/"
 class GP_Object:
     def __init__(self, target, template, var, svar):
         self._target = target
+        print('Traget = ', self._target)
         self._filename = 'lbl2_' + target + '_' + template + '.rdb'
         self._varname = var
         self._svarname = svar
+        print('Variable = ', self._varname)
 
         data = read_rdb_asdict(cwd + 'lbl_spirou/lblrdb/' + self._filename)
 
@@ -131,7 +133,7 @@ class GP_Object:
                             plot_datapoints=False, title_fmt='g')
         plt.savefig(self.outdir + self._target + '_' + self._varname + '_corner.pdf',
                     format="pdf", bbox_inches="tight")
-        plt.show()
+        #plt.show()
 
     def best_fit(self):
         ind_mlh = np.argmax([self.logPosterior(self.flat_samples[i])
@@ -139,14 +141,46 @@ class GP_Object:
         sample_mlh = self.flat_samples[ind_mlh]
         return (sample_mlh, self.logPosterior(sample_mlh))
 
-    def print_posteriors(self):
+    def save_results(self):
         labels = ["$\eta_1$", "$\eta_2$", "$\eta_3$", "$\eta_4$", "Jitter"]
+        post = []
         for i in range(self.ndim):
             mcmc = np.percentile(self.flat_samples[:,i], [16, 50, 84])
             q = np.diff(mcmc)
             txt = "\mathrm{{{3}}} = {0:.3f}_{{-{1:.3f}}}^{{{2:.3f}}}"
             txt = txt.format(mcmc[1], q[0], q[1], labels[i])
-            display(Math(txt))
+            print(txt)
+            post.append(txt)
+
+        mf_params = self.mean_fit()
+        mf_residual, mf_wrms = self.display_fit(mf_params)
+
+        print('wRMS = ', mf_wrms)
+        post.append('wRMS = ' + str(mf_wrms))
+
+        logpost = self.logPosterior(mf_params)
+        print('LogPosterior = ', logpost)
+        post.append('LogPosterior = ' + str(logpost))
+
+        chi = chisq(mf_residual, self.yerr, np.zeros_like(mf_residual))
+        print('$\chi^2$ = ', chi)
+        post.append('$\chi^2$ = '+ str(chi))
+
+        chir = chi/(len(mf_residual)-self.ndim-1)
+        print('$\chi^2_{red}$ = ', chir)
+        post.append('$\chi^2_{red}$ = '+ str(chir))
+
+        chi = normalized_chi2(mf_residual, self.yerr, mf_params[-1])
+        print('$\chi^2$ = ', chi)
+        post.append('$\chi^2$ = '+ str(chi))
+
+        chir = chi/(len(mf_residual)-self.ndim-1)
+        print('$\chi^2_{red}$ = ', chir)
+        post.append('$\chi^2_{red}$ = '+ str(chir))
+
+        np.savetxt(self.outdir + self._target + '_' + self._varname + '_results.txt', post, fmt='%s')
+
+        self.corner_plot()
 
     def mean_fit(self):
         return(np.median(self.flat_samples, axis=0))
@@ -193,7 +227,7 @@ class GP_Object:
 
         y_mean, y_std, time = gpOBJ.prediction(kernel,mean,tplot)
 
-        fig, ax = plt.subplots(2, 1, sharex=True, height_ratios=(2,1))
+        fig, ax = plt.subplots(2, 1, sharex=True, height_ratios=(2,1), figsize=(16, 8))
         ax[0].errorbar(self.times, self.y, self.yerr, fmt='ko')
         ax[0].plot(tplot, y_mean, c=c)
         ax[0].fill_between(tplot, y_mean+y_std, y_mean-y_std, color=c, alpha=0.3)
@@ -204,15 +238,12 @@ class GP_Object:
         ax[1].errorbar(self.times, y_sample, self.yerr, fmt='ko')
         ax[1].set_xlabel('rjd (d)', size=12, weight='bold')
         ax[1].set_ylabel('residuals', size=12, weight='bold')
-        ax[1].annotate( "wRMS :  "
-                        + str(mean_squared_error(y_sample,
-                                                np.zeros_like(y_sample),
-                                                sample_weight=1/self.yerr,
-                                                squared=False))
-                                        , (self.times[2], np.max(y_sample)))
+        wrms = mean_squared_error(y_sample, np.zeros_like(y_sample),
+                                  sample_weight=1/self.yerr, squared=False)
+        ax[1].annotate( "wRMS :  " + str(wrms), (self.times[2], np.max(y_sample)))
         plt.savefig(self.outdir + self._target + '_' + self._varname + '_fit.pdf',
                     format="pdf", bbox_inches="tight")
-        plt.show()
+        return(y_sample, wrms)
 
 ## tools
 
@@ -251,3 +282,12 @@ def ind_outliers(v, k):
     rejection = wapiti_tools.absolute_deviation(v) > k*madv
     rejection_index = np.where(rejection)[0]
     return(rejection_index)
+
+def chisq(obs, obs_err, exp):
+    return(np.sum((obs - exp)**2 / obs_err**2))
+
+
+def normalized_chi2(res, yerr, jitt):
+    norm_res = res/np.sqrt(yerr**2 + (np.ones_like(yerr)*jitt)**2)
+    chi2 = np.dot(norm_res,norm_res)
+    return chi2
