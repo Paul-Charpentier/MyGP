@@ -180,6 +180,8 @@ class GP_Object:
 
         np.savetxt(self.outdir + self._target + '_' + self._varname + '_results.txt', post, fmt='%s')
 
+        self.save_residuals()
+
         self.corner_plot()
 
     def mean_fit(self):
@@ -235,6 +237,9 @@ class GP_Object:
 
         y_sample, _, _ = gpOBJ.prediction(kernel,mean,self.times)
         y_sample -= self.y
+
+        self.residuals = y_sample
+
         ax[1].errorbar(self.times, y_sample, self.yerr, fmt='ko')
         ax[1].set_xlabel('rjd (d)', size=12, weight='bold')
         ax[1].set_ylabel('residuals', size=12, weight='bold')
@@ -244,6 +249,16 @@ class GP_Object:
         plt.savefig(self.outdir + self._target + '_' + self._varname + '_fit.pdf',
                     format="pdf", bbox_inches="tight")
         return(y_sample, wrms)
+
+    def save_residuals(self):
+        with open(self.outdir + self._target + '_' + self._varname + '_residuals.rdb', 'w') as file:
+            # First line
+            file.write('rjd \t' + self._varname + '\t' + self._svarname + '\n')
+            file.write('\n')
+            for i in range(len(self.times)):
+                file.write(str(self.times[i]) + '\t' + str(self.residuals[i]) + '\t' + str(self.yerr[i]) + '\n')
+        file.close()
+
 
 ## tools
 
