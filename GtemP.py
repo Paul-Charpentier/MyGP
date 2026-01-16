@@ -5,6 +5,13 @@ import matplotlib.pyplot as plt
 import os
 from scipy import stats
 from multiprocessing import Pool
+
+import collections.abc
+collections.Iterable = collections.abc.Iterable
+collections.Mapping = collections.abc.Mapping
+collections.MutableSet = collections.abc.MutableSet
+collections.MutableMapping = collections.abc.MutableMapping
+
 import emcee
 import corner
 from loguniform import LogUniform, ModifiedLogUniform
@@ -15,8 +22,6 @@ from tqdm import tqdm
 #from IPython.display import display, Math
 import csv
 from collections import OrderedDict
-sys.path.append(os.path.abspath("/media/paulch/One Touch5/wapiti_workflow"))
-from wapiti import wapiti_tools, wapiti
 from astropy.timeseries import LombScargle
 from sklearn.metrics import mean_squared_error
 from scipy.signal import find_peaks
@@ -499,9 +504,46 @@ def read_rdb_asdict(filename):
             data[k] = np.array(v)
     return data
 
+def absolute_deviation(v: np.ndarray) -> np.ndarray:
+
+    """
+    Parameters
+    ----------
+    v: float array
+        > Input array.
+        
+    Returns
+
+    -------
+    AD: float array
+        > The absolute deviation of the input array
+    """
+    
+    v_med=np.nanmedian(v)
+    AD=(np.abs(v-v_med))
+    return AD
+
+def mad(v: np.ndarray) -> float:
+
+    """
+    Parameters
+    ----------
+    v: float array
+        > Input array.
+        
+    Returns
+    -------
+    MAD: float array
+        > The median absolute deviation of the input array
+    """
+    
+    v_med=np.nanmedian(v)
+    MAD=np.nanmedian(absolute_deviation(v))
+    return MAD
+
 def ind_outliers(v, k):
-    madv= wapiti_tools.mad(v)
-    rejection = wapiti_tools.absolute_deviation(v) > k*madv
+    madv= mad(v)
+    rejection = absolute_deviation(v) > k*madv
     rejection_index = np.where(rejection)[0]
     return(rejection_index)
 
